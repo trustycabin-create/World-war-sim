@@ -1,9 +1,22 @@
 from datetime import datetime
 import json
+import random
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
-# Streamlit Page Setup
+# ==============================================================================
+# 🔑 PERMANENT CREDENTIALS
+# ==============================================================================
+TURSO_DB_URL = "https://war-sim-db-trustycabin-create.aws-ap-south-1.turso.io"
+TURSO_AUTH_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTQxNTIyNDgsImlkIjoiMDFhMWJiY2ItN2EwMS03MGFjLWJhNjgtMjRhZmRhYzU5MWUwIiwia2lkIjoiMzUzN2hMbnhCR0trV2hnbXdCN1Y4MnA2YTJrZ1JRN041eUk5TTRVc0NYUSIsInJpZCI6IjI3Njg3MGJhLTBiNWItNGQ4Mi1hYmEyLWYzNmFmYzQwNTkxNSJ9.2iDgRALderyIM_IcVFV7cAPF4zF9sJP5ijfBp9wtKkHmk7skMMKyNgY-0ppOwjz1kK73wMH_HgmNWfPCNz2vCw"
+
+# Paste your gsk_... key inside the quotation marks below:
+GROQ_API_KEY = "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"
+
+# ==============================================================================
+# 📱 MOBILE PWA DASHBOARD CONFIGURATION
+# ==============================================================================
 st.set_page_config(
     page_title="WWII Grand Strategy 1933",
     page_icon="🎖️",
@@ -11,12 +24,34 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Turso Cloud Credentials
-TURSO_DB_URL = "https://war-sim-db-trustycabin-create.aws-ap-south-1.turso.io"
-TURSO_AUTH_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTQxNTIyNDgsImlkIjoiMDFhMWJiY2ItN2EwMS03MGFjLWJhNjgtMjRhZmRhYzU5MWUwIiwia2lkIjoiMzUzN2hMbnhCR0trV2hnbXdCN1Y4MnA2YTJrZ1JRN041eUk5TTRVc0NYUSIsInJpZCI6IjI3Njg3MGJhLTBiNWItNGQ4Mi1hYmEyLWYzNmFmYzQwNTkxNSJ9.2iDgRALderyIM_IcVFV7cAPF4zF9sJP5ijfBp9wtKkHmk7skMMKyNgY-0ppOwjz1kK73wMH_HgmNWfPCNz2vCw"
+st.markdown(
+    """
+    <style>
+    .stApp { background-color: #0b0e14; color: #c9d1d9; }
+    .teletype {
+        background-color: #161b22;
+        border-left: 4px solid #d29922;
+        padding: 12px;
+        margin-bottom: 12px;
+        font-family: monospace;
+        font-size: 0.85rem;
+    }
+    .metric-card {
+        background: #161b22;
+        border-radius: 6px;
+        padding: 10px;
+        border: 1px solid #30363d;
+        margin-bottom: 8px;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
 
 
-# Turso HTTP Pipeline
+# ==============================================================================
+# 🗄️ TURSO CLOUD PIPELINE ENGINE
+# ==============================================================================
 def query_turso(sql: str):
     url = f"{TURSO_DB_URL}/v2/pipeline"
     headers = {
@@ -60,219 +95,383 @@ def execute_turso_batch(statements: list):
         return False
 
 
-# Auto-initialize baseline tables if fresh
-def ensure_db_init():
+# Auto-expand DB schema for conquest and coordinates
+def ensure_conquest_schema():
     try:
-        res = query_turso("SELECT campaign_id FROM campaigns LIMIT 1;")
-        if not res:
-            from init_db import initialize_1933_world
-
-            initialize_1933_world()
+        execute_turso_batch([
+            "ALTER TABLE regions ADD COLUMN garrison_strength INTEGER DEFAULT"
+            " 30000;",
+            "ALTER TABLE regions ADD COLUMN latitude REAL DEFAULT 50.0;",
+            "ALTER TABLE regions ADD COLUMN longitude REAL DEFAULT 10.0;",
+            """
+            INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude)
+            VALUES 
+            ('REG-BERLIN', 'Berlin-Brandenburg', 'GERMANY', 'URBAN', 'STANDARD', 0.25, 0.5, 4300000, 2350.0, 8.0, 1.2, 100.0, 0, 75000, 52.52, 13.40),
+            ('REG-RUHR', 'Ruhr Valley', 'GERMANY', 'URBAN', 'STANDARD', 0.30, 2.0, 3800000, 2400.0, 6.0, 2.5, 100.0, 0, 25000, 51.45, 7.01),
+            ('REG-RHINELAND', 'The Rhineland', 'GERMANY', 'PLAINS', 'STANDARD', 0.28, 3.0, 2900000, 2400.0, 4.0, 1.0, 100.0, 1, 0, 50.11, 7.50),
+            ('REG-EASTPRUSSIA', 'East Prussia (Königsberg)', 'GERMANY', 'PLAINS', 'STANDARD', 0.35, -2.5, 2300000, 2200.0, 5.0, 0.5, 95.0, 0, 15000, 54.71, 20.51),
+            ('REG-AUSTRIA', 'Austria (Vienna)', 'AUSTRIA', 'HILLS', 'STANDARD', 0.22, 2.0, 6700000, 2450.0, 3.0, 0.0, 100.0, 0, 40000, 48.20, 16.37),
+            ('REG-CZECH', 'Bohemia & Sudetenland', 'CZECHOSLOVAKIA', 'MOUNTAINS', 'STANDARD', 0.30, 1.0, 7200000, 2500.0, 5.0, 0.0, 100.0, 0, 80000, 50.07, 14.43),
+            ('REG-PARIS', 'Paris & Alsace', 'FRANCE', 'URBAN', 'STANDARD', 0.25, 4.0, 4500000, 2600.0, 2.0, 0.0, 100.0, 0, 140000, 48.85, 2.35),
+            ('REG-WARSAW', 'Warsaw Province', 'POLAND', 'PLAINS', 'STANDARD', 0.40, -1.0, 3100000, 2100.0, 4.0, 0.0, 90.0, 0, 95000, 52.23, 21.01),
+            ('REG-MOSCOW', 'Moscow Oblast', 'USSR', 'URBAN', 'BROAD', 0.50, -12.0, 4000000, 2050.0, 45.0, 0.0, 85.0, 0, 250000, 55.75, 37.61);
+            """,
+        ])
     except Exception:
         pass
 
 
-ensure_db_init()
+ensure_conquest_schema()
 
 
-# Groq Dual-LLM Pipeline
-def call_groq_llm(groq_key: str, system_prompt: str, user_prompt: str):
+# ==============================================================================
+# 🤖 GROQ DUAL-LLM PIPELINE (LLAMA-3.3-70B + DEEPSEEK-R1)
+# ==============================================================================
+def call_groq_llm(key: str, sys_prompt: str, user_prompt: str):
+    if not key or "PASTE_YOUR_GROQ_KEY_HERE" in key:
+        return (
+            "ERROR: Groq API Key missing. Please paste your gsk_... key on line"
+            " 15 of app.py."
+        )
+
     headers = {
-        "Authorization": f"Bearer {groq_key}",
+        "Authorization": f"Bearer {key.strip()}",
         "Content-Type": "application/json",
     }
-    payload_primary = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.3,
-        "max_tokens": 700,
-    }
-    try:
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload_primary,
-            timeout=12,
-        )
-        if r.status_code == 200:
-            return r.json()["choices"][0]["message"]["content"]
-    except Exception:
-        pass
 
-    payload_fallback = {
-        "model": "deepseek-r1-distill-llama-70b",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.4,
-        "max_tokens": 1000,
-    }
-    try:
-        rf = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload_fallback,
-            timeout=18,
-        )
-        if rf.status_code == 200:
-            content = rf.json()["choices"][0]["message"]["content"]
-            if "</think>" in content:
-                content = content.split("</think>")[-1].strip()
-            return content
-    except Exception:
-        pass
+    models = ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b"]
+    for model in models:
+        try:
+            res = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": sys_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 800,
+                },
+                timeout=12,
+            )
+            if res.status_code == 200:
+                txt = res.json()["choices"][0]["message"]["content"]
+                if "</think>" in txt:
+                    txt = txt.split("</think>")[-1].strip()
+                return txt
+        except Exception:
+            continue
     return "TELETYPE NOTICE // DISPATCH CARRIER SEVERED // COURIER DELAY IN EFFECT."
 
 
-# Sidebar Controls
+# ==============================================================================
+# 🧭 SIDEBAR HIGH COMMAND CONTROLS
+# ==============================================================================
 with st.sidebar:
     st.title("🎖️ High Command")
-    groq_api_key = st.text_input(
-        "Groq API Key", type="password", placeholder="gsk_..."
+    st.success(
+        "API Key Locked in System"
+        if "gsk_" in GROQ_API_KEY
+        else "⚠️ Key not set on line 15"
     )
-    time_mode = st.radio(
-        "Clock Speed", ["1:1 Real-Time (Long Struggle)", "360x Fast Blitz"]
-    )
-    new_mult = 1.0 if "1:1" in time_mode else 360.0
-    if st.button("Apply Speed"):
-        execute_turso_batch([
-            f"UPDATE campaigns SET time_multiplier = {new_mult} WHERE"
-            " campaign_id = 'CMP-1933';"
-        ])
-        st.success(f"Speed set to {new_mult}x")
-        st.rerun()
 
-# Top HUD Metrics
+    st.subheader("Wehrmacht Mobilization")
+    army_row = query_turso(
+        "SELECT SUM(garrison_strength) as total_men FROM regions WHERE"
+        " owner_nation = 'GERMANY';"
+    )
+    current_men = army_row[0].get("total_men", 115000) if army_row else 115000
+    st.metric("Total Armed Personnel", f"{int(current_men):,} men")
+    if current_men > 100000:
+        st.warning(
+            "⚠️ Versailles 100,000-man military cap breached! Allied"
+            " surveillance alerted."
+        )
+
+# ==============================================================================
+# 📊 TOP HUD STOCKPILES (1933 REALISM)
+# ==============================================================================
 stock = query_turso(
     "SELECT * FROM national_stockpiles WHERE nation = 'GERMANY' LIMIT 1;"
 )
 c1, c2, c3, c4 = st.columns(4)
 if stock:
     s = stock[0]
-    c1.metric("Date", "30 Jan 1933")
+    c1.metric("Date", "1933 Simulation")
     c2.metric("Crude Oil", f"{float(s.get('crude_oil', 0)):,.0f} t")
     c3.metric("Steel", f"{float(s.get('high_grade_steel', 0)):,.0f} t")
-    c4.metric("Chromium", f"{float(s.get('chromium', 0)):,.1f} t")
+    c4.metric("Munitions", f"{float(s.get('munitions_tonnage', 0)):,.0f} t")
 
 st.divider()
 
-# Command Tabs
-tab_inbox, tab_cabinet, tab_map, tab_industry = st.tabs([
-    "📥 Intelligence Inbox",
+# ==============================================================================
+# 🎮 DASHBOARD TABS
+# ==============================================================================
+tab_map, tab_conquer, tab_industry, tab_decrees, tab_inbox = st.tabs([
+    "🗺️ Operational Map",
+    "⚔️ War Theater & Conquest",
+    "⚙️ Armament Works",
     "🏛️ War Cabinet Hub",
-    "🗺️ Operational Sectors",
-    "⚙️ Metallurgical Stockpiles",
+    "📥 Intelligence Inbox",
 ])
 
-with tab_inbox:
-    st.subheader("Situational Dispatches & Reconnaissance Feed")
-    dispatches = query_turso(
-        "SELECT * FROM intelligence_dispatches ORDER BY dispatch_id DESC"
-        " LIMIT 8;"
-    )
-    for d in dispatches:
-        st.info(
-            f"[{d.get('classification')}] {d.get('headline')} —"
-            f" {d.get('origin')}\n\n{d.get('body')}"
-        )
-
-with tab_cabinet:
-    st.subheader("Issue Micro or Macro Decrees")
-    user_decree = st.text_area(
-        "Decree to High Command",
-        placeholder=(
-            "e.g. Order Krupp to redesign all standard 7.92mm cartridges with"
-            " tungsten-carbide cores..."
-        ),
-    )
-    if st.button("Transmit Directive", use_container_width=True):
-        if not groq_api_key:
-            st.error("Please enter your Groq API Key in the left sidebar first.")
-        elif not user_decree.strip():
-            st.warning("Please enter a directive.")
-        else:
-            with st.spinner(
-                "Compiling order through General Staff reality validation..."
-            ):
-                sys_prompt = (
-                    "You are the Oberkommando der Wehrmacht (OKW) General Staff"
-                    " in 1933. Decompose user decree into logistical,"
-                    " metallurgical, and geopolitical consequences. Terse"
-                    " military dispatch tone."
-                )
-                response_text = call_groq_llm(
-                    groq_api_key, sys_prompt, user_decree
-                )
-                dispatch_id = f"DISP-{datetime.utcnow().strftime('%M%S')}"
-                clean_txt = response_text[:350].replace("'", "''")
-                log_sql = (
-                    "INSERT INTO intelligence_dispatches (dispatch_id,"
-                    " timestamp, origin, classification, headline, body) VALUES"
-                    f" ('{dispatch_id}', datetime('now'), 'War Cabinet',"
-                    " 'DECREE-ACK', 'OPERATIONAL DIRECTIVE RECORDED',"
-                    f" '{clean_txt}');"
-                )
-                execute_turso_batch([log_sql])
-                st.success(response_text)
-
+# --- 1. OPERATIONAL EUROPEAN MAP ---
 with tab_map:
-    st.subheader("European Strategic Map Nodes (1933 Borders)")
-    regions = query_turso(
-        "SELECT region_id, name, owner_nation, terrain_type, rail_gauge,"
-        " soil_moisture, is_demilitarized FROM regions;"
+    st.subheader("European Theater of Operations (1933 Strategic Nodes)")
+
+    regions_data = query_turso(
+        "SELECT region_id, name, owner_nation, terrain_type, is_demilitarized,"
+        " garrison_strength, latitude, longitude FROM regions;"
     )
-    col_a, col_b = st.columns(2)
-    for idx, r in enumerate(regions):
-        target_col = col_a if idx % 2 == 0 else col_b
-        demil = (
-            "⚠️ DEMILITARIZED ZONE"
-            if int(r.get("is_demilitarized", 0)) == 1
-            else "ACTIVE MILITARY SECTOR"
+
+    color_map = {
+        "GERMANY": "#5c6b73",  # Wehrmacht Field Gray
+        "FRANCE": "#1f77b4",  # Allied Blue
+        "POLAND": "#e377c2",  # Polish Pink/Crimson
+        "USSR": "#d62728",  # Soviet Crimson Red
+        "AUSTRIA": "#bcbd22",  # Austrian Gold
+        "CZECHOSLOVAKIA": "#2ca02c",  # Czech Green
+    }
+
+    markers_js = []
+    for r in regions_data:
+        lat = float(r.get("latitude") or 50.0)
+        lon = float(r.get("longitude") or 10.0)
+        owner = r.get("owner_nation")
+        name = r.get("name")
+        garrison = int(r.get("garrison_strength") or 0)
+        is_demil = int(r.get("is_demilitarized") or 0)
+
+        marker_color = (
+            "#e6a23c" if is_demil else color_map.get(owner, "#999999")
         )
-        with target_col:
-            st.markdown(
-                f"**{r.get('name')}** ({r.get('owner_nation')})  \n*{demil}* "
-                f" \nTerrain: {r.get('terrain_type')} | Moisture:"
-                f" {float(r.get('soil_moisture', 0.2)):.2f} | Rail:"
-                f" {r.get('rail_gauge')}"
+        status_txt = (
+            "⚠️ DEMILITARIZED BUFFER"
+            if is_demil
+            else f"Garrison: {garrison:,} men"
+        )
+        popup = (
+            f"<b>{name}</b><br>Owner: {owner}<br>{status_txt}<br>Terrain:"
+            f" {r.get('terrain_type')}"
+        )
+
+        markers_js.append(
+            f"L.circleMarker([{lat}, {lon}], {{radius: 12, fillColor:"
+            f" '{marker_color}', color: '#ffffff', weight: 2, fillOpacity:"
+            f" 0.85}}).addTo(map).bindPopup('{popup}');"
+        )
+
+    all_markers = "\n".join(markers_js)
+
+    map_template = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+            #map { height: 420px; width: 100%; border-radius: 8px; background: #0b0e14; }
+            .leaflet-popup-content-wrapper { background: #161b22; color: #e6edf3; font-family: monospace; border: 1px solid #30363d; }
+            .leaflet-popup-tip { background: #161b22; }
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <script>
+            var map = L.map('map').setView([51.5, 13.0], 4);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 7,
+                minZoom: 3,
+                attribution: '&copy; CartoDB'
+            }).addTo(map);
+            __MARKERS__
+        </script>
+    </body>
+    </html>
+    """
+    final_map_html = map_template.replace("__MARKERS__", all_markers)
+    components.html(final_map_html, height=440)
+    st.caption(
+        "🗺️ Map Legend: Gray = Germany | Blue = France | Pink = Poland | Red = USSR"
+        " | Gold = Austria | Orange = Demilitarized"
+    )
+
+# --- 2. WAR THEATER & CONQUEST ---
+with tab_conquer:
+    st.subheader("Operational War Theater: Execute Invasions & Remilitarization")
+
+    all_regions = query_turso("SELECT * FROM regions;")
+    region_options = {
+        f"{r['name']} ({r['owner_nation']})": r for r in all_regions
+    }
+
+    col_target, col_action = st.columns(2)
+    with col_target:
+        selected_label = st.selectbox(
+            "Select Target Sector", list(region_options.keys())
+        )
+        target_region = region_options[selected_label]
+
+    with col_action:
+        if (
+            target_region["owner_nation"] == "GERMANY"
+            and int(target_region.get("is_demilitarized") or 0) == 1
+        ):
+            action_type = st.radio(
+                "Operation Type",
+                [
+                    "Remilitarize Sector (Breach Versailles)",
+                    "Maintain Observation",
+                ],
+            )
+        elif target_region["owner_nation"] == "GERMANY":
+            action_type = st.radio(
+                "Operation Type", ["Reinforce Garrison", "Redeploy Divisions"]
+            )
+        else:
+            action_type = st.radio(
+                "Operation Type",
+                [
+                    "Launch Armed Blitzkrieg",
+                    "Diplomatic Subversion / Annexation",
+                ],
             )
 
+    troops_committed = st.slider(
+        "Divisions / Personnel to Commit", 5000, 150000, 35000, step=5000
+    )
+
+    if st.button("⚔️ EXECUTE GENERAL STAFF ORDER", use_container_width=True):
+        reg_id = target_region["region_id"]
+        reg_name = target_region["name"]
+        curr_owner = target_region["owner_nation"]
+        curr_garrison = int(target_region.get("garrison_strength") or 30000)
+
+        # Rhineland Remilitarization
+        if "Remilitarize" in action_type:
+            with st.spinner(
+                "Marching Reichswehr infantry battalions across the Rhine"
+                " bridges..."
+            ):
+                if random.random() < 0.85:
+                    outcome = (
+                        "SUCCESS // Allied Powers lodged formal diplomatic"
+                        " protests in Geneva, but French divisions remain"
+                        " locked behind the Maginot Line. Rhineland"
+                        " re-integrated into the Reich!"
+                    )
+                    sql_updates = [
+                        f"UPDATE regions SET is_demilitarized = 0, garrison_strength = {troops_committed} WHERE region_id = '{reg_id}';",
+                        f"INSERT INTO intelligence_dispatches VALUES ('DISP-{random.randint(1000,9999)}', datetime('now'), 'OKW High Command', 'VICTORY', 'RHINELAND REMILITARIZED', '{outcome}');",
+                    ]
+                    execute_turso_batch(sql_updates)
+                    st.success(outcome)
+                    st.rerun()
+                else:
+                    outcome = (
+                        "CRISIS // French High Command initiates partial"
+                        " mobilization! Severe diplomatic blockade imposed."
+                    )
+                    st.error(outcome)
+
+        # Armed Blitzkrieg (Lanchester Combat Model)
+        elif "Armed Blitzkrieg" in action_type:
+            with st.spinner(
+                f"Assaulting {reg_name} against {curr_owner} forces..."
+            ):
+                attacker_loss = int(
+                    curr_garrison * 0.28 * random.uniform(0.7, 1.2)
+                )
+                defender_loss = int(
+                    troops_committed * 0.45 * random.uniform(0.8, 1.3)
+                )
+
+                remaining_attacker = max(0, troops_committed - attacker_loss)
+                remaining_defender = max(0, curr_garrison - defender_loss)
+
+                fuel_burnt = (troops_committed / 1000.0) * 12.0
+                ammo_burnt = (troops_committed / 1000.0) * 8.5
+
+                if remaining_attacker > remaining_defender:
+                    outcome = (
+                        f"PROVINCE CAPTURED // {reg_name} has fallen!"
+                        f" Wehrmacht casualties: {attacker_loss:,} men. Enemy"
+                        f" losses: {defender_loss:,} men. Province annexed!"
+                    )
+                    sql_updates = [
+                        f"UPDATE regions SET owner_nation = 'GERMANY', garrison_strength = {remaining_attacker} WHERE region_id = '{reg_id}';",
+                        f"UPDATE national_stockpiles SET crude_oil = MAX(0, crude_oil - {fuel_burnt}), munitions_tonnage = MAX(0, munitions_tonnage - {ammo_burnt}) WHERE nation = 'GERMANY';",
+                        f"INSERT INTO intelligence_dispatches VALUES ('DISP-{random.randint(1000,9999)}', datetime('now'), 'Frontline Command', 'CONQUEST', '{reg_name.upper()} SEIZED', '{outcome}');",
+                    ]
+                    execute_turso_batch(sql_updates)
+                    st.success(outcome)
+                    st.rerun()
+                else:
+                    outcome = (
+                        f"OFFENSIVE REPULSED // Attack stalled in {reg_name}."
+                        f" Wehrmacht suffered {attacker_loss:,} casualties."
+                    )
+                    sql_updates = [
+                        f"UPDATE regions SET garrison_strength = {remaining_defender} WHERE region_id = '{reg_id}';",
+                        f"UPDATE national_stockpiles SET crude_oil = MAX(0, crude_oil - {fuel_burnt}), munitions_tonnage = MAX(0, munitions_tonnage - {ammo_burnt}) WHERE nation = 'GERMANY';",
+                    ]
+                    execute_turso_batch(sql_updates)
+                    st.error(outcome)
+
+        # Diplomatic Annexation
+        elif "Annexation" in action_type:
+            with st.spinner(
+                "Coordinating diplomatic ultimatums with fifth-columnists in"
+                f" {reg_name}..."
+            ):
+                if random.random() > 0.40:
+                    outcome = (
+                        "ANNEXATION COMPLETE // Local cabinet capitulated to"
+                        f" ultimatums. {reg_name} absorbed into the Reich with"
+                        " zero combat losses!"
+                    )
+                    sql_updates = [
+                        f"UPDATE regions SET owner_nation = 'GERMANY', garrison_strength = {troops_committed + curr_garrison} WHERE region_id = '{reg_id}';",
+                        f"INSERT INTO intelligence_dispatches VALUES ('DISP-{random.randint(1000,9999)}', datetime('now'), 'Foreign Ministry', 'INTEGRATION', '{reg_name.upper()} ANNEXED', '{outcome}');",
+                    ]
+                    execute_turso_batch(sql_updates)
+                    st.success(outcome)
+                    st.rerun()
+                else:
+                    st.warning(
+                        "DIPLOMATIC STALEMATE // The local government refused"
+                        " ultimatums; border garrisons reinforced."
+                    )
+
+# --- 3. ARMAMENT WORKS & RECRUITMENT ---
 with tab_industry:
-    st.subheader("National Armaments & Chemical Balance")
-    if stock:
-        s = stock[0]
-        i1, i2 = st.columns(2)
-        with i1:
-            st.write(
-                f"**Crude Petroleum:** {float(s.get('crude_oil', 0)):,.1f} tons"
+    st.subheader("Industrial Mobilization & Equipment Production")
+    col_prod1, col_prod2 = st.columns(2)
+
+    with col_prod1:
+        st.markdown("**Recruit Wehrmacht Divisions**")
+        st.caption("Consumes: 2,000t High-Grade Steel + 150t Munitions")
+        if st.button("Mobilize 15,000 Infantry Cadre"):
+            sql = [
+                "UPDATE national_stockpiles SET high_grade_steel ="
+                " high_grade_steel - 2000, munitions_tonnage = munitions_tonnage"
+                " - 150 WHERE nation = 'GERMANY';",
+                "UPDATE regions SET garrison_strength = garrison_strength +"
+                " 15000 WHERE region_id = 'REG-BERLIN';",
+            ]
+            execute_turso_batch(sql)
+            st.success(
+                "15,000 fresh infantry inducted into Berlin Reserve Cadre!"
             )
-            st.write(
-                f"**Synthetic Fuel:** {float(s.get('synthetic_fuel', 0)):,.1f}"
-                " tons"
-            )
-            st.write(
-                f"**Lignite Coal:** {float(s.get('lignite_coal', 0)):,.1f} tons"
-            )
-            st.write(
-                "**High-Grade Steel:**"
-                f" {float(s.get('high_grade_steel', 0)):,.1f} tons"
-            )
-        with i2:
-            st.write(
-                f"**Chromium Alloy:** {float(s.get('chromium', 0)):,.1f} tons"
-            )
-            st.write(
-                f"**Manganese Alloy:** {float(s.get('manganese', 0)):,.1f} tons"
-            )
-            st.write(
-                f"**Tungsten (Wolfram):** {float(s.get('tungsten', 0)):,.1f}"
-                " tons"
-            )
-            st.write(
-                f"**Synthetic Rubber:** {float(s.get('rubber', 0)):,.1f} tons"
-            )
-            
+            st.rerun()
+
+    with col_prod2:
+        st.markdown("**Fischer-Tropsch Synthetic Fuel Synthesis**")
+        st.caption(
+            "Consumes: 10,000t Lignite Coal -> Yields: 3,500t Synthetic Fuel"
+        )
+        if st.button("Synthesize Synthetic Fuel"):
+            sql = [
+                "UPDATE national_stockpiles SET lignite_coal = lignite_coal -
