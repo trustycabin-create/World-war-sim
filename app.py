@@ -40,6 +40,21 @@ st.markdown(
 )
 
 # ==============================================================================
+# 🛠️ ROBUST DATA TYPE HELPERS
+# ==============================================================================
+def safe_int(val, default=0):
+    try:
+        return int(float(val)) if val is not None else default
+    except (ValueError, TypeError):
+        return default
+
+def safe_float(val, default=0.0):
+    try:
+        return float(val) if val is not None else default
+    except (ValueError, TypeError):
+        return default
+
+# ==============================================================================
 # 🗄️ TURSO DATABASE PIPELINE
 # ==============================================================================
 def query_turso(sql: str):
@@ -78,23 +93,27 @@ def add_dispatch(headline: str, body: str, classification: str = "DIRECTIVE", or
     execute_turso_batch([sql])
 
 def ensure_conquest_schema():
-    try:
-        execute_turso_batch([
-            "ALTER TABLE regions ADD COLUMN garrison_strength INTEGER DEFAULT 30000;",
-            "ALTER TABLE regions ADD COLUMN latitude REAL DEFAULT 50.0;",
-            "ALTER TABLE regions ADD COLUMN longitude REAL DEFAULT 10.0;",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-BERLIN', 'Berlin-Brandenburg', 'GERMANY', 'URBAN', 'STANDARD', 0.25, 0.5, 4300000, 2350.0, 8.0, 1.2, 100.0, 0, 75000, 52.52, 13.40);",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-RUHR', 'Ruhr Valley', 'GERMANY', 'URBAN', 'STANDARD', 0.30, 2.0, 3800000, 2400.0, 6.0, 2.5, 100.0, 0, 25000, 51.45, 7.01);",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-RHINELAND', 'The Rhineland', 'GERMANY', 'PLAINS', 'STANDARD', 0.28, 3.0, 2900000, 2400.0, 4.0, 1.0, 100.0, 1, 0, 50.11, 7.50);",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-EASTPRUSSIA', 'East Prussia (Königsberg)', 'GERMANY', 'PLAINS', 'STANDARD', 0.35, -2.5, 2300000, 2200.0, 5.0, 0.5, 95.0, 0, 15000, 54.71, 20.51);",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-AUSTRIA', 'Austria (Vienna)', 'AUSTRIA', 'HILLS', 'STANDARD', 0.22, 2.0, 6700000, 2450.0, 3.0, 0.0, 100.0, 0, 40000, 48.20, 16.37);",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-CZECH', 'Bohemia & Sudetenland', 'CZECHOSLOVAKIA', 'MOUNTAINS', 'STANDARD', 0.30, 1.0, 7200000, 2500.0, 5.0, 0.0, 100.0, 0, 80000, 50.07, 14.43);",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-PARIS', 'Paris & Alsace', 'FRANCE', 'URBAN', 'STANDARD', 0.25, 4.0, 4500000, 2600.0, 2.0, 0.0, 100.0, 0, 140000, 48.85, 2.35);",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-WARSAW', 'Warsaw Province', 'POLAND', 'PLAINS', 'STANDARD', 0.40, -1.0, 3100000, 2100.0, 4.0, 0.0, 90.0, 0, 95000, 52.23, 21.01);",
-            "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-MOSCOW', 'Moscow Oblast', 'USSR', 'URBAN', 'BROAD', 0.50, -12.0, 4000000, 2050.0, 45.0, 0.0, 85.0, 0, 250000, 55.75, 37.61);"
-        ])
-    except Exception:
-        pass
+    patches = [
+        "ALTER TABLE regions ADD COLUMN garrison_strength INTEGER DEFAULT 30000;",
+        "ALTER TABLE regions ADD COLUMN latitude REAL DEFAULT 50.0;",
+        "ALTER TABLE regions ADD COLUMN longitude REAL DEFAULT 10.0;",
+        "ALTER TABLE national_stockpiles ADD COLUMN munitions_tonnage REAL DEFAULT 45000.0;",
+        "UPDATE national_stockpiles SET munitions_tonnage = 45000.0 WHERE munitions_tonnage IS NULL;",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-BERLIN', 'Berlin-Brandenburg', 'GERMANY', 'URBAN', 'STANDARD', 0.25, 0.5, 4300000, 2350.0, 8.0, 1.2, 100.0, 0, 75000, 52.52, 13.40);",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-RUHR', 'Ruhr Valley', 'GERMANY', 'URBAN', 'STANDARD', 0.30, 2.0, 3800000, 2400.0, 6.0, 2.5, 100.0, 0, 25000, 51.45, 7.01);",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-RHINELAND', 'The Rhineland', 'GERMANY', 'PLAINS', 'STANDARD', 0.28, 3.0, 2900000, 2400.0, 4.0, 1.0, 100.0, 1, 0, 50.11, 7.50);",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-EASTPRUSSIA', 'East Prussia (Königsberg)', 'GERMANY', 'PLAINS', 'STANDARD', 0.35, -2.5, 2300000, 2200.0, 5.0, 0.5, 95.0, 0, 15000, 54.71, 20.51);",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-AUSTRIA', 'Austria (Vienna)', 'AUSTRIA', 'HILLS', 'STANDARD', 0.22, 2.0, 6700000, 2450.0, 3.0, 0.0, 100.0, 0, 40000, 48.20, 16.37);",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-CZECH', 'Bohemia & Sudetenland', 'CZECHOSLOVAKIA', 'MOUNTAINS', 'STANDARD', 0.30, 1.0, 7200000, 2500.0, 5.0, 0.0, 100.0, 0, 80000, 50.07, 14.43);",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-PARIS', 'Paris & Alsace', 'FRANCE', 'URBAN', 'STANDARD', 0.25, 4.0, 4500000, 2600.0, 2.0, 0.0, 100.0, 0, 140000, 48.85, 2.35);",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-WARSAW', 'Warsaw Province', 'POLAND', 'PLAINS', 'STANDARD', 0.40, -1.0, 3100000, 2100.0, 4.0, 0.0, 90.0, 0, 95000, 52.23, 21.01);",
+        "INSERT OR REPLACE INTO regions (region_id, name, owner_nation, terrain_type, rail_gauge, soil_moisture, temperature_c, population, caloric_intake, terror_index, resistance_network, infrastructure_hp, is_demilitarized, garrison_strength, latitude, longitude) VALUES ('REG-MOSCOW', 'Moscow Oblast', 'USSR', 'URBAN', 'BROAD', 0.50, -12.0, 4000000, 2050.0, 45.0, 0.0, 85.0, 0, 250000, 55.75, 37.61);"
+    ]
+    for patch in patches:
+        try:
+            execute_turso_batch([patch])
+        except Exception:
+            pass
 
 ensure_conquest_schema()
 
@@ -126,10 +145,11 @@ with st.sidebar:
     st.title("🎖️ High Command")
     st.success("Groq Neural Pipeline Active")
     army_row = query_turso("SELECT SUM(garrison_strength) as total_men FROM regions WHERE owner_nation = 'GERMANY';")
-    current_men = army_row[0].get("total_men", 115000) if army_row else 115000
-    st.metric("Total Armed Personnel", f"{int(current_men):,} men")
+    raw_men = army_row[0].get("total_men") if army_row else None
+    current_men = safe_int(raw_men, 115000)
+    st.metric("Total Armed Personnel", f"{current_men:,} men")
     if current_men > 100000:
-        st.warning("⚠️ Versailles 100,000-man military cap breached!")
+        st.warning("⚠️ Versailles 100,000-man military cap breached!")[span_1](start_span)[span_1](end_span)
 
 # ==============================================================================
 # 📊 TOP HUD STOCKPILES
@@ -139,9 +159,9 @@ c1, c2, c3, c4 = st.columns(4)
 if stock:
     s = stock[0]
     c1.metric("Date", "1933 Simulation")
-    c2.metric("Crude Oil", f"{float(s.get('crude_oil', 0)):,.0f} t")
-    c3.metric("Steel", f"{float(s.get('high_grade_steel', 0)):,.0f} t")
-    c4.metric("Munitions", f"{float(s.get('munitions_tonnage', 0)):,.0f} t")
+    c2.metric("Crude Oil", f"{safe_float(s.get('crude_oil'), 0.0):,.0f} t")
+    c3.metric("Steel", f"{safe_float(s.get('high_grade_steel'), 0.0):,.0f} t")
+    c4.metric("Munitions", f"{safe_float(s.get('munitions_tonnage'), 45000.0):,.0f} t")
 
 st.divider()
 
@@ -166,12 +186,12 @@ with tab_map:
     }
     markers_js = []
     for r in regions_data:
-        lat = float(r.get("latitude") or 50.0)
-        lon = float(r.get("longitude") or 10.0)
-        owner = r.get("owner_nation")
-        name = r.get("name")
-        garrison = int(r.get("garrison_strength") or 0)
-        is_demil = int(r.get("is_demilitarized") or 0)
+        lat = safe_float(r.get("latitude"), 50.0)
+        lon = safe_float(r.get("longitude"), 10.0)
+        owner = str(r.get("owner_nation") or "UNKNOWN")
+        name = str(r.get("name") or "Sector")
+        garrison = safe_int(r.get("garrison_strength"), 0)
+        is_demil = safe_int(r.get("is_demilitarized"), 0)
         m_color = "#e6a23c" if is_demil else color_map.get(owner, "#999999")
         status_txt = "DEMILITARIZED BUFFER" if is_demil else f"Garrison: {garrison:,} men"
         popup = f"{name} ({owner}) - {status_txt}"
@@ -194,7 +214,8 @@ with tab_conquer:
         target_region = region_options[selected_label]
 
     with col_action:
-        if target_region["owner_nation"] == "GERMANY" and int(target_region.get("is_demilitarized") or 0) == 1:
+        is_target_demil = safe_int(target_region.get("is_demilitarized"), 0)
+        if target_region["owner_nation"] == "GERMANY" and is_target_demil == 1:
             action_type = st.radio("Operation Type", ["Remilitarize Sector (Breach Versailles)", "Maintain Observation"])
         elif target_region["owner_nation"] == "GERMANY":
             action_type = st.radio("Operation Type", ["Reinforce Garrison", "Redeploy Divisions"])
@@ -207,12 +228,12 @@ with tab_conquer:
         reg_id = target_region["region_id"]
         reg_name = target_region["name"]
         curr_owner = target_region["owner_nation"]
-        curr_garrison = int(target_region.get("garrison_strength") or 30000)
+        curr_garrison = safe_int(target_region.get("garrison_strength"), 30000)
 
         if "Remilitarize" in action_type:
             with st.spinner("Marching Reichswehr columns across the Rhine..."):
                 if random.random() < 0.85:
-                    outcome = "SUCCESS // French forces remain static behind Maginot Line. Rhineland sovereign military zone restored!"
+                    outcome = "SUCCESS // French forces remain static behind Maginot Line. Rhineland sovereign military zone restored[span_2](start_span)!"[span_2](end_span)
                     execute_turso_batch([f"UPDATE regions SET is_demilitarized = 0, garrison_strength = {troops_committed} WHERE region_id = '{reg_id}';"])
                     add_dispatch("RHINELAND REMILITARIZED", outcome, "VICTORY", "OKW High Command")
                     st.success(outcome)
@@ -274,7 +295,7 @@ with tab_industry:
             st.rerun()
 
     with col2:
-        st.markdown("**Fischer-Tropsch Synthetic Fuel Synthesis**")
+        st.markdown("**Fischer-Tropsch Synthetic Fuel Synthesis**")[span_3](start_span)[span_3](end_span)
         st.caption("Consumes: 10,000t Coal -> Yields: 3,500t Fuel")
         if st.button("Synthesize Synthetic Fuel"):
             execute_turso_batch([
@@ -291,19 +312,4 @@ with tab_decrees:
         if not decree_txt.strip():
             st.warning("Please type a directive.")
         else:
-            with st.spinner("General Staff reality gatekeeper processing..."):
-                sys_prompt = "You are the OKW General Staff in 1933. Decompose user decree into realistic metallurgical, logistical, and diplomatic consequences. Terse military dispatch tone."
-                resp = call_groq_llm(GROQ_API_KEY, sys_prompt, decree_txt)
-                add_dispatch("DECREE ACKNOWLEDGED", resp, "DIRECTIVE", "War Cabinet")
-                st.info(resp)
-
-# 5. INTELLIGENCE DISPATCHES
-with tab_inbox:
-    st.subheader("Intelligence Teletype Feed")
-    disp = query_turso("SELECT * FROM intelligence_dispatches ORDER BY timestamp DESC LIMIT 8;")
-    for d in disp:
-        st.markdown(
-            f"""<div class="teletype"><b>[{d.get('classification')}] {d.get('headline')}</b> — <i>{d.get('origin')}</i><br>{d.get('body')}</div>""",
-            unsafe_allow_html=True,
-        )
-        
+            with st.spinner("General Staff reality gat
