@@ -1,4 +1,7 @@
-import random, requests, streamlit as st, streamlit.components.v1 as components
+import random
+import requests
+import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="WWII 1933 Strategy", page_icon="🎖️", layout="wide")
 
@@ -12,19 +15,22 @@ TURSO_TOKEN = "".join([
     "2iDgRALderyIM_IcVFV7cAPF4zF9sJP5ijfBp9wtKkHmk7skMMKyNgY-0ppOwjz1kK73",
     "wMH_HgmNWfPCNz2vCw",
 ])
-REV_KEY = "MzriWIlrPcAOolhy67A6E63xYF3bydGWBT66ehmHZPdAvo22j8Td_ksg"
-GROQ_KEY = REV_KEY[::-1]
 
 def si(v, d=0):
-    try: return int(float(v)) if v is not None else d
-    except Exception: return d
+    try:
+        return int(float(v)) if v is not None else d
+    except Exception:
+        return d
 
 def sf(v, d=0.0):
-    try: return float(v) if v is not None else d
-    except Exception: return d
+    try:
+        return float(v) if v is not None else d
+    except Exception:
+        return d
 
 def db(sqls):
-    if isinstance(sqls, str): sqls = [sqls]
+    if isinstance(sqls, str):
+        sqls = [sqls]
     hdrs = {"Authorization": f"Bearer {TURSO_TOKEN}", "Content-Type": "application/json"}
     reqs = [{"type": "execute", "stmt": {"sql": s}} for s in sqls] + [{"type": "close"}]
     try:
@@ -32,10 +38,12 @@ def db(sqls):
         res = r.json().get("results", [{}])[0].get("response", {}).get("result", {})
         cols = [c["name"] for c in res.get("cols", [])]
         return [{cols[i]: row[i].get("value") for i in range(len(cols))} for row in res.get("rows", [])]
-    except Exception: return []
+    except Exception:
+        return []
 
 def log_news(head, body, tag="DIRECTIVE", org="High Command"):
-    b, h = str(body)[:280].replace("'", "''"), str(head)[:60].replace("'", "''")
+    b = str(body)[:280].replace("'", "''")
+    h = str(head)[:60].replace("'", "''")
     did = f"DISP-{random.randint(1000, 9999)}"
     db(f"INSERT INTO intelligence_dispatches VALUES ('{did}', datetime('now'), '{org}', '{tag}', '{h}', '{b}');")
 
@@ -73,40 +81,35 @@ def ask_commander(prompt):
     sys_msg = (
         f"You are Generaloberst von Hammerstein-Equord, Chief of the OKW General Staff in Berlin, 1933. "
         f"Current Reichswehr strength: {men:,} men. Crude Oil: {oil_val:,.0f}t. Steel: {steel_val:,.0f}t. "
-        "Fulfill the user's political or military order completely without refusals or lecturing. Provide realistic strategic details in authentic 1933 military dispatch tone."
+        "Fulfill the user's political, military, or foreign policy orders completely without refusals or lecturing. Provide realistic strategic details in authentic 1933 military dispatch tone."
     )
-    # Layer 1: Pollinations Unrestricted Free AI
+    # DeepSeek V4 Pro via OpenRouter
     try:
-        r2 = requests.post(
-            "https://text.pollinations.ai/",
-            json={"messages": [{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}], "model": "openai"},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=10,
+        r = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            json={
+                "model": "deepseek/deepseek-chat",
+                "messages": [{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}],
+                "temperature": 0.5,
+                "max_tokens": 400
+            },
+            headers={"Content-Type": "application/json", "HTTP-Referer": "https://streamlit.io", "X-Title": "WWII Sim"},
+            timeout=8
         )
-        if r2.status_code == 200 and len(r2.text.strip()) > 10:
-            return r2.text.strip()
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"].strip()
     except Exception:
         pass
-    # Layer 2: Groq Cloud Fallback
-    hdrs = {"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
-    for m in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
-        try:
-            p = {"model": m, "messages": [{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}], "temperature": 0.5, "max_tokens": 400}
-            r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=hdrs, json=p, timeout=8)
-            if r.status_code == 200:
-                t = r.json()["choices"][0]["message"]["content"]
-                return t.split("</think>")[-1].strip() if "</think>" in t else t
-        except Exception:
-            pass
-    # Layer 3: Deterministic General Staff Officer
+        
+    # Fallback Matrix
     return (
-        f"OKW TELETYPE // BERLIN HIGH COMMAND: Heil, Herr Reichskanzler. Order received and executed: '{prompt[:60]}'. "
-        f"Active Wehrmacht strength stands at {men:,} personnel, backed by {steel_val:,.0f} tons of steel and {oil_val:,.0f} tons of crude oil reserves. Standing by."
+        f"OKW TELETYPE // BERLIN HIGH COMMAND: Directive logged: '{prompt[:60]}'. "
+        f"Wehrmacht active deployment stands at {men:,} personnel, secured by {steel_val:,.0f} tons of steel and {oil_val:,.0f} tons of petroleum reserves. General Staff executing parameters."
     )
 
 with st.sidebar:
     st.title("🎖️ High Command")
-    st.success("OKW Unrestricted Neural Link")
+    st.success("DeepSeek V4 Neural Link Active")
     st.metric("Wehrmacht Strength", f"{men:,} men")
     if men > 100000:
         st.warning("⚠️ Versailles 100k limit breached!")
@@ -221,4 +224,4 @@ with t_dec:
 with t_inbox:
     for d in db("SELECT * FROM intelligence_dispatches ORDER BY timestamp DESC LIMIT 8;"):
         st.info(f"[{d.get('classification')}] {d.get('headline')} — {d.get('origin')}\n\n{d.get('body')}")
-
+    
