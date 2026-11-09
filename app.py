@@ -5,6 +5,7 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="WWII 1933 Strategy", page_icon="🎖️", layout="wide")
 
+# --- CONFIG & CREDENTIALS ---
 TURSO_URL = "https://war-sim-db-trustycabin-create.aws-ap-south-1.turso.io"
 TURSO_TOKEN = "".join([
     "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.",
@@ -15,6 +16,7 @@ TURSO_TOKEN = "".join([
     "2iDgRALderyIM_IcVFV7cAPF4zF9sJP5ijfBp9wtKkHmk7skMMKyNgY-0ppOwjz1kK73",
     "wMH_HgmNWfPCNz2vCw",
 ])
+OPENROUTER_API_KEY = "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"
 
 def si(v, d=0):
     try:
@@ -93,8 +95,13 @@ def ask_commander(prompt):
                 "temperature": 0.5,
                 "max_tokens": 400
             },
-            headers={"Content-Type": "application/json", "HTTP-Referer": "https://streamlit.io", "X-Title": "WWII Sim"},
-            timeout=8
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://streamlit.io",
+                "X-Title": "WWII Sim"
+            },
+            timeout=12
         )
         if r.status_code == 200:
             return r.json()["choices"][0]["message"]["content"].strip()
@@ -224,4 +231,4 @@ with t_dec:
 with t_inbox:
     for d in db("SELECT * FROM intelligence_dispatches ORDER BY timestamp DESC LIMIT 8;"):
         st.info(f"[{d.get('classification')}] {d.get('headline')} — {d.get('origin')}\n\n{d.get('body')}")
-    
+                
